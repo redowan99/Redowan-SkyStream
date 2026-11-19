@@ -225,10 +225,8 @@
         { id: "21", title: "Anime Series", limit: 14 },
         { id: "5", title: "Hindi TV Serials", limit: 14 },
         { id: "238", title: "Indian TV Shows", limit: 14 },
-        { id: "251", title: "Awards Shows", limit: 14 },
         { id: "15", title: "WWE", limit: 14 },
         { id: "85", title: "Documentaries", limit: 14 },
-        { id: "10", title: "Islamic Videos", limit: 14 },
         { id: "250", title: "Regional & Other Movies", limit: 14 }
     ];
 
