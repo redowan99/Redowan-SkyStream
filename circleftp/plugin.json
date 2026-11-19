@@ -1,9 +1,9 @@
 {
   "packageName": "com.redowan.skystream.circleftp",
   "name": "Circle FTP",
-  "version": 3,
+  "version": 4,
   "baseUrl": "http://new.circleftp.net:5000",
-  "description": "Stream Movies, TV Series, Anime and BDIX content directly from Circle FTP",
+  "description": "Stream Movies, TV Series, Anime, Documentaries and BDIX content directly from Circle FTP",
   "authors": [
     "Redowan"
   ],
@@ -14,7 +14,8 @@
   "categories": [
     "Movie",
     "TvSeries",
-    "Anime"
+    "Anime",
+    "Documentary"
   ],
   "domains": [
     {

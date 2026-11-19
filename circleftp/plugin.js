@@ -90,6 +90,20 @@
     }
 
     /**
+     * Sanitizes stream URLs (handles typos like 'ttp://', protocol-relative '//', etc.)
+     */
+    function sanitizeStreamUrl(url) {
+        if (!url || typeof url !== "string") return "";
+        let u = url.trim();
+        if (u.startsWith("ttp://")) {
+            u = "h" + u;
+        } else if (u.startsWith("//")) {
+            u = "http:" + u;
+        }
+        return u;
+    }
+
+    /**
      * Parses numeric year from strings like "2026" or "2008-2013"
      */
     function parseYear(yearStr) {
@@ -194,18 +208,28 @@
     }
 
     /**
-     * Home screen categories configuration
+     * Home screen categories configuration - covers all CircleFTP video categories
      */
     const HOME_CATEGORIES = [
-        { id: "80", title: "Trending", limit: 12 },            // Featured Carousel
-        { id: "6", title: "English Movies", limit: 12 },
-        { id: "9", title: "TV Series", limit: 12 },
-        { id: "22", title: "Dubbed Series & Shows", limit: 12 },
-        { id: "2", title: "Hindi Movies", limit: 12 },
-        { id: "3", title: "South Indian Movies", limit: 12 },
-        { id: "1", title: "Animation Movies", limit: 12 },
-        { id: "21", title: "Anime Series", limit: 12 },
-        { id: "85", title: "Documentaries", limit: 12 }
+        { id: "80", title: "Trending", limit: 14 },
+        { id: "6", title: "English Movies", limit: 14 },
+        { id: "9", title: "TV Series", limit: 14 },
+        { id: "22", title: "Dubbed TV Series & Shows", limit: 14 },
+        { id: "2", title: "Hindi Movies", limit: 14 },
+        { id: "7", title: "Hindi Dubbed Movies", limit: 14 },
+        { id: "3", title: "South Indian Dubbed Movies", limit: 14 },
+        { id: "4", title: "South Indian Movies", limit: 14 },
+        { id: "8", title: "Foreign Language Movies", limit: 14 },
+        { id: "1", title: "Animation Movies", limit: 14 },
+        { id: "20", title: "Animation Dubbed Movies", limit: 14 },
+        { id: "21", title: "Anime Series", limit: 14 },
+        { id: "5", title: "Hindi TV Serials", limit: 14 },
+        { id: "238", title: "Indian TV Shows", limit: 14 },
+        { id: "251", title: "Awards Shows", limit: 14 },
+        { id: "15", title: "WWE", limit: 14 },
+        { id: "85", title: "Documentaries", limit: 14 },
+        { id: "10", title: "Islamic Videos", limit: 14 },
+        { id: "250", title: "Regional & Other Movies", limit: 14 }
     ];
 
     /**
@@ -323,7 +347,7 @@
                 });
             }
 
-            const isSeries = post.type === "series";
+            const isSeries = post.type === "series" || (Array.isArray(post.content) && post.content.length > 0 && typeof post.content[0] === "object");
             const categoryNames = Array.isArray(post.categories) 
                 ? post.categories.map(c => c.name).filter(Boolean)
                 : [];
@@ -343,7 +367,7 @@
 
             if (!isSeries) {
                 // Movie / Single Video
-                const directVideoUrl = post.content || "";
+                const directVideoUrl = sanitizeStreamUrl(post.content || "");
                 const instantStreams = directVideoUrl ? [
                     new StreamResult({
                         url: directVideoUrl,
@@ -351,6 +375,18 @@
                         quality: qualityBadge
                     })
                 ] : [];
+
+                // Crucial for SkyStream: DetailsActionButtons gates the Play button on
+                // details.episodes != null && details.episodes.isNotEmpty.
+                // Creating a single Episode enables the Play button and direct playback.
+                const movieEpisode = new Episode({
+                    name: title,
+                    url: directVideoUrl || `${baseUrl}/api/posts/${post.id}`,
+                    season: 1,
+                    episode: 1,
+                    posterUrl: posterUrl,
+                    streams: instantStreams
+                });
 
                 const movieItem = new MultimediaItem({
                     title: title,
@@ -364,7 +400,8 @@
                     tags: categoryNames.length > 0 ? categoryNames : undefined,
                     status: "completed",
                     isAdult: false,
-                    streams: instantStreams
+                    streams: instantStreams,
+                    episodes: [movieEpisode]
                 });
 
                 return cb({
@@ -389,7 +426,7 @@
                         const epTitle = ep.title || `Episode ${epIndex}`;
                         const epNumMatch = epTitle.match(/episode[:\s]*(\d+)/i);
                         const epNum = epNumMatch ? parseInt(epNumMatch[1], 10) : epIndex;
-                        const streamLink = ep.link || "";
+                        const streamLink = sanitizeStreamUrl(ep.link || "");
 
                         const epStreams = streamLink ? [
                             new StreamResult({
@@ -454,8 +491,10 @@
                 return cb({ success: false, errorCode: "EMPTY_URL", message: "No stream URL provided" });
             }
 
+            url = sanitizeStreamUrl(url);
+
             // If the URL is already a direct video file or FTP link
-            if (/\.(mkv|mp4|avi|webm|ts|m4v)(\?.*)?$/i.test(url) || url.includes("/FILE/")) {
+            if (/\.(mkv|mp4|avi|webm|ts|m4v)(\?.*)?$/i.test(url) || url.includes("/FILE/") || url.includes("/SERVER-") || url.includes("/DRIVE")) {
                 return cb({
                     success: true,
                     data: [
@@ -473,17 +512,39 @@
             if (postId) {
                 const baseUrl = getBaseUrl();
                 const post = await fetchJson(`${baseUrl}/api/posts/${postId}`);
-                if (post && post.content && typeof post.content === "string") {
-                    return cb({
-                        success: true,
-                        data: [
-                            new StreamResult({
-                                url: post.content,
-                                source: "Circle FTP",
-                                quality: post.quality || "Direct"
-                            })
-                        ]
-                    });
+                if (post && post.content) {
+                    if (typeof post.content === "string") {
+                        const streamUrl = sanitizeStreamUrl(post.content);
+                        if (streamUrl) {
+                            return cb({
+                                success: true,
+                                data: [
+                                    new StreamResult({
+                                        url: streamUrl,
+                                        source: "Circle FTP",
+                                        quality: post.quality || "Direct"
+                                    })
+                                ]
+                            });
+                        }
+                    } else if (Array.isArray(post.content) && post.content.length > 0) {
+                        const firstSeason = post.content[0];
+                        if (firstSeason && Array.isArray(firstSeason.episodes) && firstSeason.episodes.length > 0) {
+                            const streamUrl = sanitizeStreamUrl(firstSeason.episodes[0].link || "");
+                            if (streamUrl) {
+                                return cb({
+                                    success: true,
+                                    data: [
+                                        new StreamResult({
+                                            url: streamUrl,
+                                            source: "Circle FTP",
+                                            quality: post.quality || "Direct"
+                                        })
+                                    ]
+                                });
+                            }
+                        }
+                    }
                 }
             }
 
