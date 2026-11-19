@@ -3,3 +3,7 @@ node_modules/
 *.log
 .env
 package-lock.json
+.build/
+**/.build/
+dist/
+repo.json
