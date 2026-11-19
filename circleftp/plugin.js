@@ -16,37 +16,54 @@
 
     function getBaseUrl() {
         if (typeof manifest !== "undefined" && manifest && manifest.baseUrl) {
-            return manifest.baseUrl.replace(/\/+$/, "");
+            return String(manifest.baseUrl).replace(/\/+$/, "");
         }
         return DEFAULT_BASE_URL;
     }
 
+    const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
+    const HEADERS = {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/json, text/html, */*"
+    };
+
     /**
-     * Safe HTTP GET with JSON parsing (supports axios and fetch)
+     * Native HTTP GET using SkyStream's http_get bridge
      */
-    async function fetchJson(url) {
-        if (typeof axios !== "undefined" && axios && typeof axios.get === "function") {
+    async function _fetch(url) {
+        if (typeof http_get === "function") {
+            const res = await http_get(url, {
+                ...HEADERS,
+                headers: HEADERS
+            });
+            return res?.body || "";
+        } else if (typeof axios !== "undefined" && axios && typeof axios.get === "function") {
             const res = await axios.get(url, {
-                headers: {
-                    "Accept": "application/json",
-                    "User-Agent": "SkyStream/2.0"
-                },
+                headers: HEADERS,
                 timeout: 15000
             });
-            return res.data;
+            return typeof res.data === "string" ? res.data : JSON.stringify(res.data);
         } else if (typeof fetch !== "undefined") {
             const res = await fetch(url, {
-                headers: {
-                    "Accept": "application/json",
-                    "User-Agent": "SkyStream/2.0"
-                }
+                headers: HEADERS
             });
-            if (!res.ok) {
-                throw new Error(`HTTP error ${res.status} for ${url}`);
-            }
-            return await res.json();
-        } else {
-            throw new Error("No HTTP client (axios or fetch) available in runtime");
+            return await res.text();
+        }
+        throw new Error("No HTTP client (http_get) available in SkyStream runtime");
+    }
+
+    /**
+     * Safe JSON fetch helper
+     */
+    async function fetchJson(url) {
+        const body = await _fetch(url);
+        if (!body) return null;
+        if (typeof body === "object") return body;
+        try {
+            return JSON.parse(body);
+        } catch (e) {
+            console.error("JSON parse error for " + url + ": " + e.message);
+            return null;
         }
     }
 
@@ -55,11 +72,8 @@
      */
     function cleanTitle(title, name) {
         let text = (name && name.trim()) ? name.trim() : (title || "").trim();
-        // Remove common media extensions
         text = text.replace(/\.(mkv|mp4|avi|webm|ts|m4v)$/i, "");
-        // If name had release junk, clean common release tags
         text = text.replace(/(\[\s*VR\d+\s*\]|\b(x264|x265|hevc|h264|bluray|webrip|web-dl|dvdrip|1080p|720p|480p|4k|uhd)\b.*$)/i, "");
-        // Clean leading/trailing dots or underscores
         text = text.replace(/[._]/g, " ").trim();
         return text || title || "Unknown";
     }
@@ -135,7 +149,6 @@
             ? post.categories.map(c => c.name).filter(Boolean)
             : [];
 
-        // Check if category indicates Anime
         const isAnime = categoryNames.some(cat => 
             /anime/i.test(cat) || (post.title && /anime/i.test(post.title))
         );
@@ -187,8 +200,8 @@
             const baseUrl = getBaseUrl();
             const homeData = {};
 
-            // Concurrently fetch all home categories
-            const categoryPromises = HOME_CATEGORIES.map(async (cat) => {
+            // Sequential iteration ensures compatibility with QuickJS Dart bridge
+            for (const cat of HOME_CATEGORIES) {
                 try {
                     const endpoint = `${baseUrl}/api/posts?categoryExact=${cat.id}&page=1&order=desc&limit=${cat.limit}`;
                     const json = await fetchJson(endpoint);
@@ -197,20 +210,11 @@
                             .map(post => toMultimediaItem(post, baseUrl))
                             .filter(Boolean);
                         if (items.length > 0) {
-                            return { title: cat.title, items };
+                            homeData[cat.title] = items;
                         }
                     }
                 } catch (catErr) {
-                    console.error(`Failed loading category: ${cat.title}`, catErr);
-                }
-                return null;
-            });
-
-            const results = await Promise.allSettled(categoryPromises);
-
-            for (const res of results) {
-                if (res.status === "fulfilled" && res.value) {
-                    homeData[res.value.title] = res.value.items;
+                    console.error("Failed loading category " + cat.title + ": " + (catErr.message || catErr));
                 }
             }
 
