@@ -1,0 +1,9 @@
+{
+  "name": "Redowan-SkyStream",
+  "packageName": "com.redowan.skystream",
+  "description": "BDIX streaming repository for SkyStream",
+  "manifestVersion": 1,
+  "pluginLists": [
+    "https://raw.githubusercontent.com/redowan99/Redowan-SkyStream/main/dist/plugins.json"
+  ]
+}

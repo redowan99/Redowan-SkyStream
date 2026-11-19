@@ -1,0 +1,12 @@
+{
+  "name": "redowan-skystream",
+  "version": "1.0.0",
+  "description": "BDIX streaming repository for SkyStream",
+  "private": true,
+  "scripts": {
+    "deploy": "skystream deploy -u https://raw.githubusercontent.com/redowan99/Redowan-SkyStream/main/"
+  },
+  "devDependencies": {
+    "skystream-extractors": "latest"
+  }
+}
