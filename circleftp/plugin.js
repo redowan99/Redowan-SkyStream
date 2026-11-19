@@ -176,6 +176,23 @@
         });
     }
 
+    // Known post IDs with square/landscape images on CircleFTP that cause
+    // SkyStream's first-item probe to prematurely flip an entire category row to landscape
+    const LANDSCAPE_POST_IDS = new Set(["106417"]);
+
+    function ensureFirstItemPortrait(items) {
+        if (!items || items.length <= 1) return items;
+        const firstId = extractPostId(items[0].url);
+        if (firstId && LANDSCAPE_POST_IDS.has(firstId)) {
+            const portraitIdx = items.findIndex(it => !LANDSCAPE_POST_IDS.has(extractPostId(it.url)));
+            if (portraitIdx > 0) {
+                const [item] = items.splice(portraitIdx, 1);
+                items.unshift(item);
+            }
+        }
+        return items;
+    }
+
     /**
      * Home screen categories configuration
      */
@@ -206,10 +223,13 @@
                     const endpoint = `${baseUrl}/api/posts?categoryExact=${cat.id}&page=1&order=desc&limit=${cat.limit}`;
                     const json = await fetchJson(endpoint);
                     if (json && Array.isArray(json.posts)) {
-                        const items = json.posts
+                        let items = json.posts
                             .map(post => toMultimediaItem(post, baseUrl))
                             .filter(Boolean);
                         if (items.length > 0) {
+                            // Ensure the first item is portrait so SkyStream probe
+                            // keeps the row in portrait orientation
+                            items = ensureFirstItemPortrait(items);
                             homeData[cat.title] = items;
                         }
                     }
